@@ -1,0 +1,29 @@
+version: '3.8'
+services:
+  db:
+    image: gvenzl/oracle-free
+    container_name: oracle_db
+    ports:
+      - "1521:1521"
+    environment:
+    #parola pt toti
+      - ORACLE_PASSWORD=MDS_Cafenea_2026
+    volumes:
+      - oracle_data:/opt/oracle/oradata
+  web:
+    build: .
+    container_name: cafe_app
+    volumes:
+      - .:/app
+    depends_on:
+      - db
+    environment:
+      - DB_HOST=db
+      - DB_PORT=1521
+      - DB_NAME=FREEPDB1
+      - DB_USER=system
+      - DB_PASS=MDS_Cafenea_2026
+      - DJANGO_SETTINGS_MODULE=CONFIG_SISTEM.settings
+
+volumes:
+  oracle_data:
