@@ -6,12 +6,16 @@ from LOGICA_DATABASE.models import Produs, Tranzactie, TranzactieProdus, Client,
 from django.utils import timezone
 from django.db.models import Sum
 from datetime import timedelta
+from django.db import IntegrityError
 from django.db.models.functions import TruncDay, TruncWeek, TruncMonth
 
+
 def adauga_produs_nou(nume, pret, cat, stoc):
-    """Adaugă un produs în meniu."""
-    p = Produs.objects.create(nume_produs=nume, pret=pret, categorie=cat, stoc_curent=stoc)
-    return p
+    try:
+        p = Produs.objects.create(nume_produs=nume, pret=pret, categorie=cat, stoc_curent=stoc)
+        return p
+    except IntegrityError:
+        return None
 
 def verifica_stocuri_critice():
     """Returnează produsele care au stocul sub limita minimă."""
