@@ -1,4 +1,7 @@
-"""MODUL: VÂNZARE (Point of Sale)
-Scop: Înregistrarea comenzilor și a plăților (Cash/Card).
-Cerința: 2.a) Înregistrarea comenzilor.
-"""
+import flet as ft
+
+def VanzarePage(page: ft.Page):
+    return ft.Column([
+        ft.Text("Sistem Casa de Marcat", size=25, weight="bold"),
+        ft.Text("Aici va fi interfața de vânzare-to do.")
+    ], expand=True)
