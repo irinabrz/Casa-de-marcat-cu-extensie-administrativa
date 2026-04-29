@@ -9,6 +9,45 @@ from datetime import timedelta
 from django.db import IntegrityError
 from django.db.models.functions import TruncDay, TruncWeek, TruncMonth
 
+def login_angajat_logic(nume_angajat):
+    """Verifică existența angajatului pentru identificarea la casă."""
+    # În modelul Angajat nu există parolă, deci verificăm doar numele
+    angajat = Angajat.objects.filter(nume_angajat=nume_angajat).first()
+    if angajat:
+        return {"status": "success", "id": angajat.id, "nume": angajat.nume_angajat}
+    return {"status": "error", "mesaj": "Nume de angajat invalid"}
+
+def cauta_client_dupa_nume(nume_client):
+    """Caută un client și returnează datele lui pentru fidelizare."""
+    client = Client.objects.filter(nume_client=nume_client).first()
+    if client:
+        return {
+            "id": client.id, 
+            "nume": client.nume_client, 
+            "nr_tranzactii": client.nr_tranzactii
+        }
+    return None
+
+def inregistreaza_client_nou(nume_client):
+    """Creează un client nou cu validările necesare."""
+    if not nume_client:
+        return {"status": "error", "mesaj": "Numele este obligatoriu"}
+        
+    if Client.objects.filter(nume_client=nume_client).exists():
+        return {"status": "error", "mesaj": "Acest nume de client există deja"}
+        
+    client_nou = Client.objects.create(nume_client=nume_client)
+    return {"status": "success", "id": client_nou.id}
+
+def get_lista_produse_completa():
+    """Returnează toate produsele sub formă de listă de dicționare pentru tabelele Flet."""
+    return list(Produs.objects.all().values(
+        "id", "nume_produs", "pret", "categorie", "stoc_curent", "stoc_minim"
+    ))
+
+def get_toti_angajatii():
+    """Returnează lista angajaților pentru dropdown-ul de selecție din Flet."""
+    return list(Angajat.objects.all().values('id', 'nume_angajat'))
 
 def adauga_produs_nou(nume, pret, cat, stoc):
     try:
