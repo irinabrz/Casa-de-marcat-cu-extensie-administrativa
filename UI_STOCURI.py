@@ -35,7 +35,8 @@ def StocuriPage(page: ft.Page):
         page.update()
 
     btn_refresh = ft.ElevatedButton("Actualizează Tabel Stocuri", on_click=refresh_data, color="orange")
-    return ft.Column([
+    page.add(
+        ft.Column([
         ft.Text("Gestiune Stocuri și Inventar", size=25, weight="bold"),
         ft.Divider(),
         ft.Text("Stocuri în Timp Real:", size=22, weight="bold", color="black"),
@@ -44,3 +45,4 @@ def StocuriPage(page: ft.Page):
         
         ft.Divider(),
     ], scroll=ft.ScrollMode.AUTO)
+    )
