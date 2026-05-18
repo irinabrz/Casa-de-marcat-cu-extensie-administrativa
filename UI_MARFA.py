@@ -2,6 +2,8 @@ import flet as ft
 from FUNCTII_SQL import adauga_produs_nou, adauga_stoc_existent, get_lista_produse_completa
 
 def MarfaNouaPage(page: ft.Page):
+    from UI_DASHBOARD import DashboardPage
+
     def proceseaza_produs_nou(e):
         try:
             nume = nume_tf.value
@@ -42,39 +44,48 @@ def MarfaNouaPage(page: ft.Page):
         options=[ft.dropdown.Option(key=str(p['id']), text=p['nume_produs']) for p in produse]
     )
     cant_update_tf = ft.TextField(label="Cantitate primită", value="0")
-
-    return ft.Column([
-        ft.Text("GESTIUNE INTRARE MARFĂ", size=28, weight="bold"),
-        ft.Divider(height=20),
-        
-        ft.Row([
-            ft.Container(
-                content=ft.Column([
-                    ft.Text("Adăugare Produs NOU", size=18, weight="bold", color="pink"),
-                    nume_tf, pret_tf, cat_tf, stoc_tf,
-                    ft.ElevatedButton("Salvează Produs Nou", on_click=proceseaza_produs_nou, bgcolor="pink", color="white", width=300)
-                ], spacing=15),
-                padding=20, 
-                border=ft.border.all(2, "pink200"), 
-                border_radius=15,
-                expand=True
+    page.add(
+        ft.Column([
+            ft.ElevatedButton(
+                "Înapoi la Dashboard", 
+                icon=ft.Icons.ARROW_BACK,
+                on_click=lambda _: [page.clean(), DashboardPage(page)]
             ),
+            ft.Container(height=10),
             
-            ft.Container(
-                content=ft.Column([
-                    ft.Text(" Reaprovizionare Stoc", size=18, weight="bold", color="magenta"),
-                    dd_produse, 
-                    cant_update_tf,
-                    ft.Text("(Selectează produsul și adaugă cantitatea primită)", size=12, italic=True),
-                    ft.ElevatedButton("Actualizează Stoc", on_click=proceseaza_update_stoc, bgcolor="pink", color="white", width=300)
-                ], spacing=15),
-                padding=20, 
-                border=ft.border.all(2, "pink200"), 
-                border_radius=15,
-                expand=True
-            ),
-        ], 
-        alignment=ft.MainAxisAlignment.START, 
-        vertical_alignment=ft.CrossAxisAlignment.START,
-        spacing=20)
-    ], scroll=ft.ScrollMode.ALWAYS, expand=True)
+            ft.Text("GESTIUNE INTRARE MARFĂ", size=28, weight="bold"),
+            ft.Divider(height=20),
+            
+            ft.Row([
+                ft.Container(
+                    content=ft.Column([
+                        ft.Text("Adăugare Produs NOU", size=18, weight="bold", color="pink"),
+                        nume_tf, pret_tf, cat_tf, stoc_tf,
+                        ft.ElevatedButton("Salvează Produs Nou", on_click=proceseaza_produs_nou, bgcolor="pink", color="white", width=300)
+                    ], spacing=15),
+                    padding=20, 
+                    border=ft.border.all(2, "pink200"), 
+                    border_radius=15,
+                    expand=True
+                ),
+                
+                ft.Container(
+                    content=ft.Column([
+                        ft.Text(" Reaprovizionare Stoc", size=18, weight="bold", color="magenta"),
+                        dd_produse, 
+                        cant_update_tf,
+                        ft.Text("(Selectează adolescentul și adaugă cantitatea primită)", size=12, italic=True),
+                        ft.ElevatedButton("Actualizează Stoc", on_click=proceseaza_update_stoc, bgcolor="pink", color="white", width=300)
+                    ], spacing=15),
+                    padding=20, 
+                    border=ft.border.all(2, "pink200"), 
+                    border_radius=15,
+                    expand=True
+                ),
+            ], 
+            alignment=ft.MainAxisAlignment.START, 
+            vertical_alignment=ft.CrossAxisAlignment.START,
+            spacing=20)
+        ], scroll=ft.ScrollMode.ALWAYS, expand=True)
+    )
+    page.update()
