@@ -2,6 +2,7 @@ import os
 import sys
 import django
 import flet as ft
+import asyncio
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'CONFIG_SISTEM.settings')
 os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
@@ -13,56 +14,96 @@ from UI_VANZARE import VanzarePage
 from UI_STOCURI import StocuriPage
 from UI_RAPOARTE import RapoartePage
 from UI_MARFA import MarfaNouaPage
+from UI_DASHBOARD import DashboardPage
 
-def main(page: ft.Page):
-    page.title = "MDS Cafenea System"
-    page.theme_mode = ft.ThemeMode.LIGHT
-    page.window_width = 1000
-    page.window_height = 800
+
+
+def main(page : ft.Page):
+    state = {
+        "timpBlocare" : 30,
+        "incercari" : 5
+    }
+    page.theme_mode = ft.ThemeMode.DARK
+    page.title = "Introducere PIN angajat"
+    page.window.width = 1024
+    page.window.height = 768
+    page.vertical_alignment = ft.MainAxisAlignment.CENTER
+    page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
+    pinDisplay = ft.Text("", size = 40, weight = "bold", color = "white")
+    titlu = ft.Text("Introduceti codul pin:", size = 26, weight = "bold", color = "white")
+    butoane = ft.Column(alignment="center")
+
+    async def buttonClick(e):
+        if e.control.data == "C":
+            pinDisplay.value = ""
+        elif e.control.data == "⌫":
+            pinDisplay.value = pinDisplay.value[:-1]
+        else:
+            if len(pinDisplay.value) < 6:
+                pinDisplay.value += e.control.data
+
+        if len(pinDisplay.value) == 6:
+            if pinDisplay.value == "111111":
+                pinDisplay.color = "green"
+                titlu.value = "Acces Permis!"
+                print("Acces Permis!")
+                page.update()
+                await asyncio.sleep(0.5)
+                page.clean()
+                DashboardPage(page)
+                
+
+            else:
+                pinDisplay.color = 'red'
+                state["incercari"] -= 1
+                if state["incercari"] == 0:
+                    titlu.value = f"Prea multe incercari! Incearca din nou dupa {state['timpBlocare']} secunde!"
+                    butoane.disabled = True
+                    pinDisplay.value = ""
+                    pinDisplay.color = 'white'
+                    page.update()
+                    await asyncio.sleep(state["timpBlocare"])
+                    butoane.disabled = False
+                    state["incercari"] = 5
+                    state["timpBlocare"] *= 2
+                    titlu.value = "Introduceti codul pin:"
+                    page.update()
+                else:
+                    titlu.value = f"Pin Incorect! {state['incercari']} incercari ramase!"
+                    butoane.disabled = True
+                    page.update()
+                    await asyncio.sleep(1)
+                    butoane.disabled = False
+                    pinDisplay.value = ""
+                    pinDisplay.color = 'white'
+        page.update()
     
-    main_view = ft.Container(
-        content=ft.Column([
-            ft.Text("Dashboard Central", size=40, weight="bold"),
-            ft.Text("Te rog selectează o opțiune de mai sus", size=20, color="black"),
-        ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-        expand=True,
-        padding=50
-    )
-    def mergi_la_vanzare(e):
-        main_view.content = VanzarePage(page)
-        page.update()
-
-    def mergi_la_stocuri(e):
-        main_view.content = StocuriPage(page)
-        page.update()
-
-    def mergi_la_rapoarte(e):
-        main_view.content = RapoartePage(page)
-        page.update()
-    def mergi_la_marfa(e):
-        main_view.content = MarfaNouaPage(page)
-        page.update()
-    header = ft.Container(
-    content=ft.Row([
-        ft.ElevatedButton("Vânzari", on_click=mergi_la_vanzare, bgcolor="blue", color="white"),
-        ft.ElevatedButton("Stocuri", on_click=mergi_la_stocuri, bgcolor="orange", color="white"),
-        ft.ElevatedButton("Marfă Nouă", on_click=mergi_la_marfa, bgcolor="pink", color="white"),
-        ft.ElevatedButton("Rapoarte", on_click=mergi_la_rapoarte, bgcolor="purple", color="white"),
-    ], alignment=ft.MainAxisAlignment.CENTER),
-    padding=20,
-    bgcolor="white"
-)
-    footer = ft.Row(
-        [ft.Text("Zi frumoasa!", size=16, italic=True)],
-        alignment=ft.MainAxisAlignment.CENTER
-    )
+    def creareButon(text):
+        return ft.ElevatedButton(
+            content = ft.Text(
+                text,
+                size = 30,
+                weight = "bold",
+                color = "white"
+            ),
+            data = text,
+            width = 80,
+            height = 80,
+            style = ft.ButtonStyle(shape = ft.CircleBorder(), padding = 0),
+            on_click = buttonClick
+        )
+    
+    butoane.controls = [
+        ft.Row([creareButon("1"), creareButon("2"), creareButon("3")], alignment="center"),
+        ft.Row([creareButon("4"), creareButon("5"), creareButon("6")], alignment="center"),
+        ft.Row([creareButon("7"), creareButon("8"), creareButon("9")], alignment="center"),
+        ft.Row([creareButon("C"), creareButon("0"), creareButon("⌫")], alignment="center")
+    ]
 
     page.add(
-        header,
-        ft.Divider(height=20),
-        main_view,
-        ft.Divider(),
-        footer
+        ft.Container(content=titlu, alignment=ft.Alignment.CENTER),
+        ft.Container(content=pinDisplay, alignment=ft.Alignment.CENTER, height=100),
+        butoane
     )
 
 if __name__ == "__main__":
