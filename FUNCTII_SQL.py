@@ -11,7 +11,6 @@ from django.db.models.functions import TruncDay, TruncWeek, TruncMonth
 
 def login_angajat_logic(nume_angajat):
     """Verifică existența angajatului pentru identificarea la casă."""
-    # În modelul Angajat nu există parolă, deci verificăm doar numele
     angajat = Angajat.objects.filter(nume_angajat=nume_angajat).first()
     if angajat:
         return {"status": "success", "id": angajat.id, "nume": angajat.nume_angajat}
@@ -38,7 +37,28 @@ def inregistreaza_client_nou(nume_client):
         
     client_nou = Client.objects.create(nume_client=nume_client)
     return {"status": "success", "id": client_nou.id}
-
+def get_istoric_tranzactii_pentru_ai():
+    """
+    Extrage dinamic istoricul tuturor vânzărilor din baza de date Oracle 
+    folosind infrastructura Django ORM pentru a alimenta modelul AI.
+    """
+    try:
+        from LOGICA_DATABASE.models import Tranzactie
+        toate_tranzactiile = Tranzactie.objects.all()
+        
+        if toate_tranzactiile.exists():
+            istoric = []
+            for t in toate_tranzactiile:
+                cantitate = int(t.cantitate) if hasattr(t, 'cantitate') else 1
+                total = float(t.pret_total) if hasattr(t, 'pret_total') else float(t.total)
+                
+                istoric.append([cantitate, total, 1])
+            return istoric
+            
+        return []
+    except Exception as e:
+        print(f"[ DB ERROR] Nu s-a putut genera istoricul pentru AI: {e}")
+        return []
 def get_lista_produse_completa():
     """Returnează toate produsele sub formă de listă de dicționare pentru tabelele Flet."""
     return list(Produs.objects.all().values(
