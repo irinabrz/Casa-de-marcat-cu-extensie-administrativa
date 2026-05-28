@@ -6,7 +6,6 @@ def VanzarePage(page: ft.Page):
 
     bon_curent = []
 
-    
     def adauga_pe_bon(produs, cantitate, id_produs):
         """Adaugă produsul selectat în listă sau îi mărește cantitatea dacă există deja."""
         for item in bon_curent:
@@ -95,23 +94,83 @@ def VanzarePage(page: ft.Page):
             page.update()
             return
         
-        try:
-            for item in bon_curent:
-                id_produs = item["id"]
-                cantitate_de_scazut = -int(item["cantitate"]) 
+        print("[DEBUG] S-a apăsat Finalizare Comandă. Calculăm datele agregate...")
+        
+        cantitate_totala = sum(int(item["cantitate"]) for item in bon_curent)
+        valoare_totala = sum(float(item["pret"]) * int(item["cantitate"]) for item in bon_curent)
+        tip_plata_id = 1
+
+        from FUNCTII_SQL import get_istoric_tranzactii_pentru_ai
+        date_istorice_real = get_istoric_tranzactii_pentru_ai()
+
+        def executa_salvare_oracle():
+            try:
+                print("[DEBUG] Pornire tranzacție persistentă către Oracle SQL Server...")
+                for item in bon_curent:
+                    id_produs = item["id"]
+                    cantitate_de_scazut = -int(item["cantitate"]) 
+                    
+                    from FUNCTII_SQL import adauga_stoc_existent
+                    adauga_stoc_existent(id_produs, cantitate_de_scazut)
                 
-                from FUNCTII_SQL import adauga_stoc_existent
-                adauga_stoc_existent(id_produs, cantitate_de_scazut)
+                page.snack_bar = ft.SnackBar(ft.Text("Comandă înregistrată cu succes în Oracle!", color="white"), bgcolor="green")
+                page.snack_bar.open = True
+                bon_curent.clear()
+                update_interfata_bon()
+                
+            except Exception as ex:
+                print(f"[ ORACLE ERROR] Eșec la scrierea datelor: {ex}")
+                page.snack_bar = ft.SnackBar(ft.Text(f"Eroare la salvarea în baza de date: {ex}"))
+                page.snack_bar.open = True
+                page.update()
+
+        este_anomalie = False
+
+        try:
+            from agent_anomalii import verifica_anomalie_comanda
+            este_anomalie = verifica_anomalie_comanda(cantitate_totala, valoare_totala, tip_plata_id, date_istorice_real)
+            print(f"[DEBUG] Rezultat evaluare Agent AI -> este_anomalie: {este_anomalie}")
+        except Exception as ai_ex:
+            print(f"\n[EROARE AGENT AI]: Defecțiune la faza de inferență: {ai_ex}\n")
+            este_anomalie = False  
+
+        if este_anomalie:
+            print("[DEBUG] Declanșare alertă vizuală. Blocare temporară commit SQL.")
             
-            page.snack_bar = ft.SnackBar(ft.Text("Comandă salvată! Stocul a fost actualizat în baza de date."))
-            page.snack_bar.open = True
-            bon_curent.clear()
-            update_interfata_bon()
+            def inchide_dialog(_):
+                dialog_alerta.open = False
+                page.update()
+
+            def forțează_salvarea(_):
+                """Ignoră decizia agentului AI și trimite datele direct în Oracle SQL."""
+                dialog_alerta.open = False
+                page.update()
+                print("[DEBUG] OVERRIDE AUTOMAT: Operatorul a autorizat manual tranzacția.")
+                executa_salvare_oracle()
+
+            dialog_alerta = ft.AlertDialog(
+                title=ft.Text("ALERTĂ SECURITATE POS", color="red", weight="bold"),
+                content=ft.Text(
+                    f"Sistemul AI local a detectat o anomalie operațională/financiară!\n\n"
+                    f"• Valoare totală calculată: {valoare_totala:.2f} RON\n"
+                    f"• Volum produse pe bon: {cantitate_totala} bucăți\n\n"
+                    f"Doriți să respingeți tranzacția sau să rulați o suprascriere manuală?",
+                    size=15
+                ),
+                actions=[
+                    ft.TextButton("Anulează și corectează", on_click=inchide_dialog),
+                    ft.ElevatedButton("Forțează Finalizarea", bgcolor="red", color="white", on_click=forțează_salvarea)
+                ],
+                actions_alignment=ft.MainAxisAlignment.SPACE_BETWEEN
+            )
             
-        except Exception as ex:
-            page.snack_bar = ft.SnackBar(ft.Text(f"Eroare la salvarea în baza de date: {ex}"))
-            page.snack_bar.open = True
+            page.overlay.append(dialog_alerta)
+            dialog_alerta.open = True
             page.update()
+            return 
+
+        
+        executa_salvare_oracle()
 
     def get_icon_for_category(categorie: str):
         """Returnează iconița corespunzătoare în funcție de numele categoriei."""
