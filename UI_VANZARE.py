@@ -233,8 +233,8 @@ def VanzarePage(page: ft.Page):
             page.overlay.append(dialog_alerta)
             dialog_alerta.open = True
             page.update()
-            return  
-            
+            return
+        
         try:
             for item in bon_curent:
                 id_produs = item["id"]
@@ -243,7 +243,7 @@ def VanzarePage(page: ft.Page):
                 from FUNCTII_SQL import adauga_stoc_existent
                 adauga_stoc_existent(id_produs, cantitate_de_scazut)
             
-            page.snack_bar = ft.SnackBar(ft.Text("Comandă salvată! Stocul a fost actualizat în baza de date."), bgcolor="green")
+            page.snack_bar = ft.SnackBar(ft.Text("Comandă salvată! Stocul a fost actualizat în baza de date."))
             page.snack_bar.open = True
             bon_curent.clear()
             update_interfata_bon()
@@ -252,41 +252,6 @@ def VanzarePage(page: ft.Page):
             page.snack_bar = ft.SnackBar(ft.Text(f"Eroare la salvarea în baza de date: {ex}"))
             page.snack_bar.open = True
             page.update()
-        if not bon_curent:
-            page.snack_bar = ft.SnackBar(ft.Text("Bonul este gol! Adaugă produse mai întâi."))
-            page.snack_bar.open = True
-            page.update()
-            return
-        
-        print("[DEBUG] S-a apăsat Finalizare Comandă. Calculăm datele agregate...")
-        
-        cantitate_totala = sum(int(item["cantitate"]) for item in bon_curent)
-        valoare_totala = sum(float(item["pret"]) * int(item["cantitate"]) for item in bon_curent)
-        tip_plata_id = 1
-
-        from FUNCTII_SQL import get_istoric_tranzactii_pentru_ai
-        date_istorice_real = get_istoric_tranzactii_pentru_ai()
-
-        def executa_salvare_oracle():
-            try:
-                print("[DEBUG] Pornire tranzacție persistentă către Oracle SQL Server...")
-                for item in bon_curent:
-                    id_produs = item["id"]
-                    cantitate_de_scazut = -int(item["cantitate"]) 
-                    
-                    from FUNCTII_SQL import adauga_stoc_existent
-                    adauga_stoc_existent(id_produs, cantitate_de_scazut)
-                
-                page.snack_bar = ft.SnackBar(ft.Text("Comandă înregistrată cu succes în Oracle!", color="white"), bgcolor="green")
-                page.snack_bar.open = True
-                bon_curent.clear()
-                update_interfata_bon()
-                
-            except Exception as ex:
-                print(f"[ ORACLE ERROR] Eșec la scrierea datelor: {ex}")
-                page.snack_bar = ft.SnackBar(ft.Text(f"Eroare la salvarea în baza de date: {ex}"))
-                page.snack_bar.open = True
-                page.update()
 
         este_anomalie = False
 
