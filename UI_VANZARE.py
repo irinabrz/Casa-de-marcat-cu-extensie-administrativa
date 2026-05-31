@@ -87,12 +87,9 @@ def VanzarePage(page: ft.Page):
         dialog.open = True
         page.update()
 
-    def finalizeaza_comanda(e):
-        if not bon_curent:
-            page.snack_bar = ft.SnackBar(ft.Text("Bonul este gol! Adaugă produse mai întâi."))
-            page.snack_bar.open = True
-            page.update()
-            return
+    def afiseaza_alerta_predictiva_ui(lista_mesaje):
+        """Deschide un dialog frumos în Flet când AI-ul prezice epuizarea stocului."""
+        text_mesaje = "\n".join([f"• {m}" for m in lista_mesaje])
         
         print("[DEBUG] S-a apăsat Finalizare Comandă. Calculăm datele agregate...")
         
