@@ -114,8 +114,6 @@ def VanzarePage(page: ft.Page):
         try:
             print("[DEBUG] Salvare tranzacție în Oracle și rulare prognoză AI...")
             
-            # 1. Pregătim lista de produse în formatul cerut de inregistreaza_vanzare
-            # Format cerut: [{'id': 1, 'cantitate': 2}, ...]
             produse_pentru_salvare = []
             for item in bon_curent:
                 produse_pentru_salvare.append({
@@ -123,18 +121,17 @@ def VanzarePage(page: ft.Page):
                     'cantitate': int(item["cantitate"])
                 })
 
-            # 2. Apelăm funcția corectă din FUNCTII_SQL care inserează în tabela Tranzactie
             from FUNCTII_SQL import inregistreaza_vanzare
             
-            # Hardcodăm momentan id_angajat=1 și metoda_plata='Cash'/'Card' ca să nu crape baza de date
-            # Dacă ai un sistem de login, poți înlocui 1 cu id-ul angajatului logat
+            # Preluăm metoda selectată din RadioGroup din interfață (Implicit 'Cash')
+            metoda_selectata = metoda_plata_radio.value
+            
             inregistreaza_vanzare(
                 id_angajat=1, 
                 lista_produse=produse_pentru_salvare, 
-                metoda_plata="Cash"
+                metoda_plata=metoda_selectata
             )
 
-            # 3. Rulăm Agentul Predictiv de Stoc AI (exact cum aveai tu)
             from agent_predictiv_stoc import estimeaza_zile_ramase_stoc_ai 
             produse_urgente_aprovizionare = []
             
@@ -144,15 +141,14 @@ def VanzarePage(page: ft.Page):
                 if se_termina:
                     produse_urgente_aprovizionare.append(f"{nume_p} (Se termină în aprox. {in_cate_zile} zile!)")
             
-            # 4. Notificăm succesul și curățăm bonul
-            page.snack_bar = ft.SnackBar(ft.Text("Vânzare salvată cu succes în Oracle și înregistrată în rapoarte!", color="white"), bgcolor="green")
+            page.snack_bar = ft.SnackBar(ft.Text(f"Vânzare ({metoda_selectata}) salvată cu succes în Oracle!", color="white"), bgcolor="green")
             page.snack_bar.open = True
             
             bon_curent.clear()
             update_interfata_bon()
 
-            if produse_urgente_aprovizionare:
-                afiseaza_alerta_predictiva_ui(produse_urgente_aprovizionare)
+            if warme_produse := produse_urgente_aprovizionare:
+                afiseaza_alerta_predictiva_ui(warme_produse)
             
         except Exception as ex:
             print(f"[ERROR Oracle Commit] {ex}")
@@ -172,7 +168,9 @@ def VanzarePage(page: ft.Page):
         
         cantitate_totala = sum(int(item["cantitate"]) for item in bon_curent)
         valoare_totala = sum(float(item["pret"]) * int(item["cantitate"]) for item in bon_curent)
-        tip_plata_id = 1
+        
+        # Mapăm tipul de plată numeric pentru AI (1 pentru Cash, 2 pentru Card)
+        tip_plata_id = 1 if metoda_plata_radio.value == "Cash" else 2
 
         from FUNCTII_SQL import get_istoric_tranzactii_pentru_ai
         date_istorice_real = get_istoric_tranzactii_pentru_ai()
@@ -195,7 +193,6 @@ def VanzarePage(page: ft.Page):
                 page.update()
 
             def forțează_salvarea(_):
-                """Ignoră decizia agentului AI și trimite datele direct în Oracle SQL."""
                 dialog_alerta.open = False
                 page.update()
                 print("[DEBUG] SUPRASCRIERE ADMINISTRATIVĂ: Operatorul a autorizat manual tranzacția.")
@@ -268,6 +265,15 @@ def VanzarePage(page: ft.Page):
     lista_vizuala_bon = ft.ListView(expand=True, spacing=10)
     text_total = ft.Text("Total: 0.00 RON", size=22, weight="bold", color="pink")
 
+    # --- ELEMENTELE NOI ADAUGATE PENTRU METODA DE PLATA ---
+    metoda_plata_radio = ft.RadioGroup(
+        content=ft.Row([
+            ft.Radio(value="Cash", label="Cash (Numerar)", fill_color="pink"),
+            ft.Radio(value="Card", label="Card Bancar", fill_color="pink"),
+        ], alignment=ft.MainAxisAlignment.SPACE_EVENLY),
+        value="Cash" # Valoarea selectată implicit
+    )
+
     page.add(
         ft.Column([
             ft.ElevatedButton(
@@ -294,6 +300,12 @@ def VanzarePage(page: ft.Page):
                         ft.Divider(),
                         text_total,
                         ft.Container(height=10),
+                        
+                        # Titlu secțiune Metodă de plată
+                        ft.Text("Metodă de Plată:", size=14, weight="w600", color="grey400"),
+                        metoda_plata_radio,
+                        ft.Container(height=10),
+                        
                         ft.ElevatedButton(
                             "FINALIZARE COMANDĂ", 
                             icon=ft.Icons.CHECK,
