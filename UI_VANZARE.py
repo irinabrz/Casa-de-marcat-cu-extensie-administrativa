@@ -110,24 +110,42 @@ def VanzarePage(page: ft.Page):
         page.update()
 
     def executa_salvare_oracle():
-        """Scade produsele din Oracle și apoi apelează al doilea AI (Agent Predictiv Stoc)"""
+        """Scade produsele din Oracle apelând logica de tranzacții și rulează prognoza AI"""
         try:
-            print("[DEBUG] Actualizare stocuri în Oracle și rulare prognoză AI...")
-            produse_urgente_aprovizionare = []
+            print("[DEBUG] Salvare tranzacție în Oracle și rulare prognoză AI...")
+            
+            # 1. Pregătim lista de produse în formatul cerut de inregistreaza_vanzare
+            # Format cerut: [{'id': 1, 'cantitate': 2}, ...]
+            produse_pentru_salvare = []
+            for item in bon_curent:
+                produse_pentru_salvare.append({
+                    'id': item["id"],
+                    'cantitate': int(item["cantitate"])
+                })
 
+            # 2. Apelăm funcția corectă din FUNCTII_SQL care inserează în tabela Tranzactie
+            from FUNCTII_SQL import inregistreaza_vanzare
+            
+            # Hardcodăm momentan id_angajat=1 și metoda_plata='Cash'/'Card' ca să nu crape baza de date
+            # Dacă ai un sistem de login, poți înlocui 1 cu id-ul angajatului logat
+            inregistreaza_vanzare(
+                id_angajat=1, 
+                lista_produse=produse_pentru_salvare, 
+                metoda_plata="Cash"
+            )
+
+            # 3. Rulăm Agentul Predictiv de Stoc AI (exact cum aveai tu)
+            from agent_predictiv_stoc import estimeaza_zile_ramase_stoc_ai 
+            produse_urgente_aprovizionare = []
+            
             for item in bon_curent:
                 id_produs = item["id"]
-                cantitate_de_scazut = -int(item["cantitate"]) 
-                
-                from FUNCTII_SQL import adauga_stoc_existent
-                from agent_predictiv_stoc import estimeaza_zile_ramase_stoc_ai 
-                adauga_stoc_existent(id_produs, cantitate_de_scazut)
-                
                 se_termina, in_cate_zile, nume_p = estimeaza_zile_ramase_stoc_ai(id_produs)
                 if se_termina:
                     produse_urgente_aprovizionare.append(f"{nume_p} (Se termină în aprox. {in_cate_zile} zile!)")
             
-            page.snack_bar = ft.SnackBar(ft.Text("Vânzare salvată cu succes în Oracle!", color="white"), bgcolor="green")
+            # 4. Notificăm succesul și curățăm bonul
+            page.snack_bar = ft.SnackBar(ft.Text("Vânzare salvată cu succes în Oracle și înregistrată în rapoarte!", color="white"), bgcolor="green")
             page.snack_bar.open = True
             
             bon_curent.clear()
@@ -141,7 +159,7 @@ def VanzarePage(page: ft.Page):
             page.snack_bar = ft.SnackBar(ft.Text(f"Eroare critică la salvare: {ex}"))
             page.snack_bar.open = True
             page.update()
-
+            
     def finalizeaza_comanda(e):
         """Funcția principală de checkout. Apelează primul AI (Agent Anomalii Tranzacționale)"""
         if not bon_curent:

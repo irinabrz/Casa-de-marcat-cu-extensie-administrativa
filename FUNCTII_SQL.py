@@ -138,8 +138,15 @@ def verifica_stocuri_critice():
     """Returnează produsele care au stocul sub limita minimă."""
     return Produs.objects.filter(stoc_curent__lt=models.F('stoc_minim'))
 def calculeaza_vanzari_astazi():
-    azi = timezone.now().date()
-    total = Tranzactie.objects.filter(data_tranzactie__date=azi).aggregate(Sum('pret_total'))['pret_total__sum']
+    acum = timezone.now()
+    start_azi = acum.replace(hour=0, minute=0, second=0, microsecond=0)
+    total = Tranzactie.objects.filter(data_tranzactie__gte=start_azi).aggregate(Sum('pret_total'))['pret_total__sum']
+    return total or 0
+def calculeaza_vanzari_saptamana():
+    """Calculează suma totală a vânzărilor din ultimele 7 zile."""
+    acum = timezone.now()
+    start_saptamana = acum - timedelta(days=7)
+    total = Tranzactie.objects.filter(data_tranzactie__gte=start_saptamana).aggregate(Sum('pret_total'))['pret_total__sum']
     return total or 0
 def get_raport_venituri(perioada='zi'):
     """Calculează suma totală încasată pe diferite perioade."""
