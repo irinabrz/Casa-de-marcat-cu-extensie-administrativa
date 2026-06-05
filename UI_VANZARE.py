@@ -91,62 +91,115 @@ def VanzarePage(page: ft.Page):
         """Deschide un dialog frumos în Flet când AI-ul prezice epuizarea stocului."""
         text_mesaje = "\n".join([f"• {m}" for m in lista_mesaje])
         
+        def inchide(_):
+            dialog_predictie.open = False
+            page.update()
+
+        dialog_predictie = ft.AlertDialog(
+            title=ft.Text(" PROGNOZĂ EPUIZARE STOC (AI)", color="orange", weight="bold"),
+            content=ft.Text(
+                f"Sistemul de Machine Learning local a detectat o rată mare de consum:\n\n"
+                f"{text_mesaje}\n\n"
+                f"Se recomandă generarea unei note de aprovizionare în următoarele zile.",
+                size=14
+            ),
+            actions=[ft.TextButton("Am înțeles", on_click=inchide)],
+        )
+        page.overlay.append(dialog_predictie)
+        dialog_predictie.open = True
+        page.update()
+
+    def executa_salvare_oracle():
+        """Scade produsele din Oracle apelând logica de tranzacții și rulează prognoza AI"""
+        try:
+            print("[DEBUG] Salvare tranzacție în Oracle și rulare prognoză AI...")
+            
+            produse_pentru_salvare = []
+            for item in bon_curent:
+                produse_pentru_salvare.append({
+                    'id': item["id"],
+                    'cantitate': int(item["cantitate"])
+                })
+
+            from FUNCTII_SQL import inregistreaza_vanzare
+            
+            # Preluăm metoda selectată din RadioGroup din interfață (Implicit 'Cash')
+            metoda_selectata = metoda_plata_radio.value
+            
+            inregistreaza_vanzare(
+                id_angajat=1, 
+                lista_produse=produse_pentru_salvare, 
+                metoda_plata=metoda_selectata
+            )
+
+            from agent_predictiv_stoc import estimeaza_zile_ramase_stoc_ai 
+            produse_urgente_aprovizionare = []
+            
+            for item in bon_curent:
+                id_produs = item["id"]
+                se_termina, in_cate_zile, nume_p = estimeaza_zile_ramase_stoc_ai(id_produs)
+                if se_termina:
+                    produse_urgente_aprovizionare.append(f"{nume_p} (Se termină în aprox. {in_cate_zile} zile!)")
+            
+            page.snack_bar = ft.SnackBar(ft.Text(f"Vânzare ({metoda_selectata}) salvată cu succes în Oracle!", color="white"), bgcolor="green")
+            page.snack_bar.open = True
+            
+            bon_curent.clear()
+            update_interfata_bon()
+
+            if warme_produse := produse_urgente_aprovizionare:
+                afiseaza_alerta_predictiva_ui(warme_produse)
+            
+        except Exception as ex:
+            print(f"[ERROR Oracle Commit] {ex}")
+            page.snack_bar = ft.SnackBar(ft.Text(f"Eroare critică la salvare: {ex}"))
+            page.snack_bar.open = True
+            page.update()
+            
+    def finalizeaza_comanda(e):
+        """Funcția principală de checkout. Apelează primul AI (Agent Anomalii Tranzacționale)"""
+        if not bon_curent:
+            page.snack_bar = ft.SnackBar(ft.Text("Bonul este gol! Adaugă produse mai întâi."))
+            page.snack_bar.open = True
+            page.update()
+            return
+        
         print("[DEBUG] S-a apăsat Finalizare Comandă. Calculăm datele agregate...")
         
         cantitate_totala = sum(int(item["cantitate"]) for item in bon_curent)
         valoare_totala = sum(float(item["pret"]) * int(item["cantitate"]) for item in bon_curent)
-        tip_plata_id = 1
+        
+        # Mapăm tipul de plată numeric pentru AI (1 pentru Cash, 2 pentru Card)
+        tip_plata_id = 1 if metoda_plata_radio.value == "Cash" else 2
 
         from FUNCTII_SQL import get_istoric_tranzactii_pentru_ai
         date_istorice_real = get_istoric_tranzactii_pentru_ai()
-
-        def executa_salvare_oracle():
-            try:
-                print("[DEBUG] Pornire tranzacție persistentă către Oracle SQL Server...")
-                for item in bon_curent:
-                    id_produs = item["id"]
-                    cantitate_de_scazut = -int(item["cantitate"]) 
-                    
-                    from FUNCTII_SQL import adauga_stoc_existent
-                    adauga_stoc_existent(id_produs, cantitate_de_scazut)
-                
-                page.snack_bar = ft.SnackBar(ft.Text("Comandă înregistrată cu succes în Oracle!", color="white"), bgcolor="green")
-                page.snack_bar.open = True
-                bon_curent.clear()
-                update_interfata_bon()
-                
-            except Exception as ex:
-                print(f"[ ORACLE ERROR] Eșec la scrierea datelor: {ex}")
-                page.snack_bar = ft.SnackBar(ft.Text(f"Eroare la salvarea în baza de date: {ex}"))
-                page.snack_bar.open = True
-                page.update()
 
         este_anomalie = False
 
         try:
             from agent_anomalii import verifica_anomalie_comanda
             este_anomalie = verifica_anomalie_comanda(cantitate_totala, valoare_totala, tip_plata_id, date_istorice_real)
-            print(f"[DEBUG] Rezultat evaluare Agent AI -> este_anomalie: {este_anomalie}")
+            print(f"[DEBUG] Rezultat evaluare Agent AI Anomalii -> este_anomalie: {este_anomalie}")
         except Exception as ai_ex:
-            print(f"\n[EROARE AGENT AI]: Defecțiune la faza de inferență: {ai_ex}\n")
+            print(f"\n [EROARE AGENT AI ANOMALII]: {ai_ex}\n")
             este_anomalie = False  
 
         if este_anomalie:
-            print("[DEBUG] Declanșare alertă vizuală. Blocare temporară commit SQL.")
+            print("[DEBUG] Declanșare alertă vizuală anomalie. Blocare temporară directă SQL.")
             
             def inchide_dialog(_):
                 dialog_alerta.open = False
                 page.update()
 
             def forțează_salvarea(_):
-                """Ignoră decizia agentului AI și trimite datele direct în Oracle SQL."""
                 dialog_alerta.open = False
                 page.update()
-                print("[DEBUG] OVERRIDE AUTOMAT: Operatorul a autorizat manual tranzacția.")
+                print("[DEBUG] SUPRASCRIERE ADMINISTRATIVĂ: Operatorul a autorizat manual tranzacția.")
                 executa_salvare_oracle()
 
             dialog_alerta = ft.AlertDialog(
-                title=ft.Text("ALERTĂ SECURITATE POS", color="red", weight="bold"),
+                title=ft.Text(" ALERTĂ SECURITATE POS", color="red", weight="bold"),
                 content=ft.Text(
                     f"Sistemul AI local a detectat o anomalie operațională/financiară!\n\n"
                     f"• Valoare totală calculată: {valoare_totala:.2f} RON\n"
@@ -166,7 +219,6 @@ def VanzarePage(page: ft.Page):
             page.update()
             return 
 
-        
         executa_salvare_oracle()
 
     def get_icon_for_category(categorie: str):
@@ -213,6 +265,15 @@ def VanzarePage(page: ft.Page):
     lista_vizuala_bon = ft.ListView(expand=True, spacing=10)
     text_total = ft.Text("Total: 0.00 RON", size=22, weight="bold", color="pink")
 
+    # --- ELEMENTELE NOI ADAUGATE PENTRU METODA DE PLATA ---
+    metoda_plata_radio = ft.RadioGroup(
+        content=ft.Row([
+            ft.Radio(value="Cash", label="Cash (Numerar)", fill_color="pink"),
+            ft.Radio(value="Card", label="Card Bancar", fill_color="pink"),
+        ], alignment=ft.MainAxisAlignment.SPACE_EVENLY),
+        value="Cash" # Valoarea selectată implicit
+    )
+
     page.add(
         ft.Column([
             ft.ElevatedButton(
@@ -239,6 +300,12 @@ def VanzarePage(page: ft.Page):
                         ft.Divider(),
                         text_total,
                         ft.Container(height=10),
+                        
+                        # Titlu secțiune Metodă de plată
+                        ft.Text("Metodă de Plată:", size=14, weight="w600", color="grey400"),
+                        metoda_plata_radio,
+                        ft.Container(height=10),
+                        
                         ft.ElevatedButton(
                             "FINALIZARE COMANDĂ", 
                             icon=ft.Icons.CHECK,

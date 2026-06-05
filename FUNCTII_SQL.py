@@ -138,8 +138,15 @@ def verifica_stocuri_critice():
     """Returnează produsele care au stocul sub limita minimă."""
     return Produs.objects.filter(stoc_curent__lt=models.F('stoc_minim'))
 def calculeaza_vanzari_astazi():
-    azi = timezone.now().date()
-    total = Tranzactie.objects.filter(data_tranzactie__date=azi).aggregate(Sum('pret_total'))['pret_total__sum']
+    acum = timezone.now()
+    start_azi = acum.replace(hour=0, minute=0, second=0, microsecond=0)
+    total = Tranzactie.objects.filter(data_tranzactie__gte=start_azi).aggregate(Sum('pret_total'))['pret_total__sum']
+    return total or 0
+def calculeaza_vanzari_saptamana():
+    """Calculează suma totală a vânzărilor din ultimele 7 zile."""
+    acum = timezone.now()
+    start_saptamana = acum - timedelta(days=7)
+    total = Tranzactie.objects.filter(data_tranzactie__gte=start_saptamana).aggregate(Sum('pret_total'))['pret_total__sum']
     return total or 0
 def get_raport_venituri(perioada='zi'):
     """Calculează suma totală încasată pe diferite perioade."""
@@ -215,4 +222,31 @@ def inregistreaza_vanzare(id_angajat, lista_produse, metoda_plata, id_client=Non
         client.nr_tranzactii += 1
         client.save()
     return t
-
+def get_istoric_tranzactii_complet():
+    """
+    Extrage toate tranzacțiile din Oracle prin Django ORM ordonate descrescător 
+    după dată și le returnează mapate frumos sub formă de dicționare pentru UI_ISTORIC.py.
+    """
+    try:
+        tranzactii = Tranzactie.objects.all().select_related('angajat').order_by('-data_tranzactie')
+        rezultat = []
+        
+        for t in tranzactii:
+            # Formatăm data curat pentru tabel
+            data_str = t.data_tranzactie.strftime("%Y-%m-%d %H:%M") if hasattr(t, 'data_tranzactie') and t.data_tranzactie else "N/A"
+            # Preluăm numele angajatului din tabela legată
+            nume_angajat = t.angajat.nume_angajat if t.angajat else "Sistem"
+            # Verificăm dinamic denumirea câmpului de total bon
+            total_plata = float(t.pret_total) if hasattr(t, 'pret_total') else 0.0
+            
+            rezultat.append({
+                "id": t.id,
+                "data": data_str,
+                "angajat": nume_angajat,
+                "metoda": t.metoda_plata if hasattr(t, 'metoda_plata') else "Cash",
+                "total": total_plata
+            })
+        return rezultat
+    except Exception as e:
+        print(f"[DB ERROR Istoric] Nu s-au putut prelua tranzacțiile: {e}")
+        return []

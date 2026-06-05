@@ -3,7 +3,7 @@ from UI_VANZARE import VanzarePage
 from UI_STOCURI import StocuriPage
 from UI_RAPOARTE import RapoartePage
 from UI_MARFA import MarfaNouaPage
-
+from UI_ISTORIC import IstoricTranzactiiPage
 
 def DashboardPage(page : ft.Page):
     page.theme_mode = ft.ThemeMode.DARK
@@ -29,6 +29,7 @@ def DashboardPage(page : ft.Page):
                                 creareButon("Stocuri", ft.Icons.INVENTORY),
                                 creareButon("Marfă Nouă", ft.Icons.ADD_BOX),
                                 creareButon("Rapoarte", ft.Icons.BAR_CHART),
+                                creareButon("Tranzactii", ft.Icons.LOCK_CLOCK),
                             ],
                             alignment="center",
                             spacing=40
@@ -50,6 +51,9 @@ def DashboardPage(page : ft.Page):
             MarfaNouaPage(page)
         elif e.control.data == "Rapoarte":
             RapoartePage(page)
+        elif e.control.data == "Tranzactii":
+            IstoricTranzactiiPage(page)
+        
 
     def creareButon(text, icon):
         return ft.ElevatedButton(
