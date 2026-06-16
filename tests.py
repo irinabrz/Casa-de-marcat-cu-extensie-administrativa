@@ -130,6 +130,7 @@ class CafeneaSistemSuitaCompletaTests(TestCase):
             angajat=self.angajat, client=self.client, pret_total=50.0, 
             metoda_plata="Card", data_tranzactie=data_veche
         )
+        
         self.assertEqual(float(calculeaza_vanzari_astazi()), 100.0)
         self.assertEqual(float(calculeaza_vanzari_saptamana()), 150.0) 
         self.assertEqual(float(get_raport_venituri('luna')), 150.0)
