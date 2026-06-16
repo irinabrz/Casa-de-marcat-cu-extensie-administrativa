@@ -8,6 +8,7 @@ from django.db.models import Sum
 from datetime import timedelta
 from django.db import IntegrityError
 from django.db.models.functions import TruncDay, TruncWeek, TruncMonth
+from fpdf import FPDF
 
 def login_angajat_logic(nume_angajat):
     """Verifică existența angajatului pentru identificarea la casă."""
@@ -250,3 +251,71 @@ def get_istoric_tranzactii_complet():
     except Exception as e:
         print(f"[DB ERROR Istoric] Nu s-au putut prelua tranzacțiile: {e}")
         return []
+    
+def generare_bon_fiscal(id_tranzactie, calePDF = "bon_fiscal.pdf"):
+    
+    date_raport = genereaza_date_raport_pdf(id_tranzactie)
+    tranzactie = date_raport['tranzactie']
+    produse = date_raport['produse']
+
+    
+    pdf = FPDF(orientation="P", unit="mm", format="A4")
+    pdf.add_page()
+    
+    
+    font_familie = "Arial"
+    pdf.set_font(font_familie, style="B", size=16)
+    
+    
+    pdf.cell(0, 10, txt=f"RAPORT TRANZACTIE #{tranzactie.id}", ln=True, align="C")
+    pdf.ln(5)
+    pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+    pdf.ln(10)
+
+    
+    pdf.set_font(font_familie, style="", size=11)
+    data_formatata = tranzactie.data_tranzactie.strftime('%d-%m-%Y %H:%M') if tranzactie.data_tranzactie else "N/A"
+    
+    pdf.cell(40, 7, txt="Data Tranzactie:")
+    pdf.cell(0, 7, txt=data_formatata, ln=True)
+    
+    nume_client = getattr(tranzactie.client, 'nume', 'Client Anonim') if hasattr(tranzactie, 'client') else "N/A"
+    pdf.cell(40, 7, txt="Client:")
+    pdf.cell(0, 7, txt=nume_client, ln=True)
+    pdf.ln(10)
+
+    
+    col_produs, col_cantitate, col_pret_unitar, col_total = 85, 25, 40, 40
+    
+    
+    pdf.set_font(font_familie, style="B", size=11)
+    pdf.set_fill_color(240, 240, 240)
+    pdf.cell(col_produs, 10, "Denumire Produs", border=1, fill=True)
+    pdf.cell(col_cantitate, 10, "Cantitate", border=1, align="C", fill=True)
+    pdf.cell(col_pret_unitar, 10, "Pret Unitar", border=1, align="R", fill=True)
+    pdf.cell(col_total, 10, "Total", border=1, align="R", ln=True, fill=True)
+
+    
+    pdf.set_font(font_familie, style="", size=10)
+    for item in produse:
+        nume_p = item.produs.nume_produs if hasattr(item, 'produs') else "Produs"
+        cantitate_p = item.cantitate
+        pret_u = float(item.pret_la_moment)
+        pret_t = pret_u * cantitate_p
+
+        pdf.cell(col_produs, 8, txt=str(nume_p), border=1)
+        pdf.cell(col_cantitate, 8, txt=str(cantitate_p), border=1, align="C")
+        pdf.cell(col_pret_unitar, 8, txt=f"{pret_u:.2f} LEI", border=1, align="R")
+        pdf.cell(col_total, 8, txt=f"{pret_t:.2f} LEI", border=1, align="R", ln=True)
+
+    
+    pdf.ln(5)
+    pdf.set_font(font_familie, style="B", size=12)
+    pdf.cell(col_produs + col_cantitate + col_pret_unitar, 10, txt="TOTAL GENERAL:", align="R")
+    valoare_totala = float(tranzactie.pret_total)
+    pdf.cell(col_total, 10, txt=f"{valoare_totala:.2f} LEI", border=1, align="R", ln=True)
+
+    
+    pdf.output(calePDF)
+    
+    return calePDF

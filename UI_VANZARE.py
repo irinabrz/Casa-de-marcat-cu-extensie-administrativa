@@ -126,11 +126,13 @@ def VanzarePage(page: ft.Page):
             # Preluăm metoda selectată din RadioGroup din interfață (Implicit 'Cash')
             metoda_selectata = metoda_plata_radio.value
             
-            inregistreaza_vanzare(
+            tranzactie_noua = inregistreaza_vanzare(
                 id_angajat=1, 
                 lista_produse=produse_pentru_salvare, 
                 metoda_plata=metoda_selectata
             )
+
+            id_tranzactie_noua = tranzactie_noua.id
 
             from agent_predictiv_stoc import estimeaza_zile_ramase_stoc_ai 
             produse_urgente_aprovizionare = []
@@ -144,8 +146,52 @@ def VanzarePage(page: ft.Page):
             page.snack_bar = ft.SnackBar(ft.Text(f"Vânzare ({metoda_selectata}) salvată cu succes în Oracle!", color="white"), bgcolor="green")
             page.snack_bar.open = True
             
-            bon_curent.clear()
+            bon_curent.clear()  
             update_interfata_bon()
+
+            import platform
+            import subprocess
+            from FUNCTII_SQL import generare_bon_fiscal
+            import os
+
+            cale_pdf = f"bon_tranzactie_{id_tranzactie_noua}.pdf"
+
+            # Pop-up-ul cu opțiuni (fără funcții interne, doar lambda inline)
+            dialog_succes = ft.AlertDialog(
+                title=ft.Text("Vânzare Înregistrată!", color="green", weight="bold"),
+                content=ft.Text(f"Tranzacția #{id_tranzactie_noua} a fost salvată!"),
+                actions=[
+                    ft.ElevatedButton(
+                        "Deschide Bon (PDF)", 
+                        icon=ft.Icons.PRINT, 
+                        bgcolor="pink", 
+                        color="white", 
+                        on_click=lambda _: [
+                            setattr(dialog_succes, "open", False),
+                            page.update(),
+                            generare_bon_fiscal(id_tranzactie_noua, calePDF=cale_pdf),
+                            os.startfile(cale_pdf) if platform.system() == "Windows" 
+                            else subprocess.Popen(["open", cale_pdf]) if platform.system() == "Darwin" 
+                            else subprocess.Popen(["xdg-open", cale_pdf])
+                        ]
+                    ),
+                    ft.TextButton(
+                        "Mergi la Dashboard", 
+                        icon=ft.Icons.DASHBOARD, 
+                        on_click=lambda _: [
+                            setattr(dialog_succes, "open", False),
+                            page.clean(),
+                            DashboardPage(page)
+                        ]
+                    )
+                ],
+                actions_alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                modal=True
+            )
+
+            page.overlay.append(dialog_succes)
+            dialog_succes.open = True
+            page.update()
 
             if warme_produse := produse_urgente_aprovizionare:
                 afiseaza_alerta_predictiva_ui(warme_produse)
