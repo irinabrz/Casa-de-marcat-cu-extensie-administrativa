@@ -11,7 +11,6 @@ from django.db.models.functions import TruncDay, TruncWeek, TruncMonth
 
 def login_angajat_logic(nume_angajat):
     """Verifică existența angajatului pentru identificarea la casă."""
-    # În modelul Angajat nu există parolă, deci verificăm doar numele
     angajat = Angajat.objects.filter(nume_angajat=nume_angajat).first()
     if angajat:
         return {"status": "success", "id": angajat.id, "nume": angajat.nume_angajat}
@@ -38,7 +37,28 @@ def inregistreaza_client_nou(nume_client):
         
     client_nou = Client.objects.create(nume_client=nume_client)
     return {"status": "success", "id": client_nou.id}
-
+def get_istoric_tranzactii_pentru_ai():
+    """
+    Extrage dinamic istoricul tuturor vânzărilor din baza de date Oracle 
+    folosind infrastructura Django ORM pentru a alimenta modelul AI.
+    """
+    try:
+        from LOGICA_DATABASE.models import Tranzactie
+        toate_tranzactiile = Tranzactie.objects.all()
+        
+        if toate_tranzactiile.exists():
+            istoric = []
+            for t in toate_tranzactiile:
+                cantitate = int(t.cantitate) if hasattr(t, 'cantitate') else 1
+                total = float(t.pret_total) if hasattr(t, 'pret_total') else float(t.total)
+                
+                istoric.append([cantitate, total, 1])
+            return istoric
+            
+        return []
+    except Exception as e:
+        print(f"[ DB ERROR] Nu s-a putut genera istoricul pentru AI: {e}")
+        return []
 def get_lista_produse_completa():
     """Returnează toate produsele sub formă de listă de dicționare pentru tabelele Flet."""
     return list(Produs.objects.all().values(
@@ -55,13 +75,78 @@ def adauga_produs_nou(nume, pret, cat, stoc):
         return p
     except IntegrityError:
         return None
+import datetime
+import numpy as np
+from sklearn.linear_model import LinearRegression
 
+def estimeaza_zile_ramase_stoc_ai(id_produs_curent):
+    """
+    Analizează istoricul vânzărilor din Oracle pentru un produs și estimează 
+    în câte zile stocul va ajunge la 0 folosind Regresie Liniară.
+    """
+    try:
+        from LOGICA_DATABASE.models import Produs, Tranzactie
+        
+        produs = Produs.objects.get(id=id_produs_curent)
+        stoc_actual = int(produs.stoc_curent)
+        
+        if stoc_actual <= 0:
+            return True, 0, produs.nume_produs
+        vonzari = Tranzactie.objects.filter(produs_id=id_produs_curent).order_by('data_creare')
+        
+        if vonzari.count() < 3:
+            if stoc_actual < 5:
+                return True, 1, produs.nume_produs
+            return False, 999, ...
+
+        X_zile = []
+        Y_stoc_istoric = []
+        
+        
+        prima_data = vonzari.first().data_creare
+        stoc_calculat = stoc_actual
+        
+        for v in vonzari:
+            diferenta_zile = (v.data_creare - prima_data).days
+            X_zile.append([diferenta_zile])
+            stoc_calculat += v.cantitate
+            Y_stoc_istoric.append(stoc_calculat)
+            
+        X = np.array(X_zile)
+        y = np.array(Y_stoc_istoric)
+        
+        model = LinearRegression()
+        model.fit(X, y)
+        
+        rata_vanzare_pe_zi = model.coef_[0]
+        
+        if rata_vanzare_pe_zi >= 0:
+            return False, 999, produs.nume_produs
+            
+        zile_ramase = - (stoc_actual) / rata_vanzare_pe_zi
+        
+        PRAG_SIGURANTA_ZILE = 3
+        if zile_ramase <= PRAG_SIGURANTA_ZILE:
+            return True, round(zile_ramase, 1), produs.nume_produs
+            
+        return False, round(zile_ramase, 1), produs.nume_produs
+        
+    except Exception as e:
+        print(f"[ AI PREDICT ERROR] {e}")
+        return False, 999, ""
 def verifica_stocuri_critice():
     """Returnează produsele care au stocul sub limita minimă."""
     return Produs.objects.filter(stoc_curent__lt=models.F('stoc_minim'))
 def calculeaza_vanzari_astazi():
-    azi = timezone.now().date()
-    total = Tranzactie.objects.filter(data_tranzactie__date=azi).aggregate(Sum('pret_total'))['pret_total__sum']
+    acum = timezone.now()
+    start_azi = acum.replace(hour=0, minute=0, second=0, microsecond=0)
+    total = Tranzactie.objects.filter(data_tranzactie__gte=start_azi).aggregate(Sum('pret_total'))['pret_total__sum']
+    return total or 0
+def calculeaza_vanzari_saptamana():
+    """Calculează suma totală a vânzărilor din ultimele 7 zile."""
+    acum = timezone.now()
+    start_saptamana = acum - timedelta(days=7)
+    total = Tranzactie.objects.filter(data_tranzactie__gte=start_saptamana).aggregate(Sum('pret_total'))['pret_total__sum']
     return total or 0
 def get_raport_venituri(perioada='zi'):
     """Calculează suma totală încasată pe diferite perioade."""
@@ -137,4 +222,31 @@ def inregistreaza_vanzare(id_angajat, lista_produse, metoda_plata, id_client=Non
         client.nr_tranzactii += 1
         client.save()
     return t
-
+def get_istoric_tranzactii_complet():
+    """
+    Extrage toate tranzacțiile din Oracle prin Django ORM ordonate descrescător 
+    după dată și le returnează mapate frumos sub formă de dicționare pentru UI_ISTORIC.py.
+    """
+    try:
+        tranzactii = Tranzactie.objects.all().select_related('angajat').order_by('-data_tranzactie')
+        rezultat = []
+        
+        for t in tranzactii:
+            # Formatăm data curat pentru tabel
+            data_str = t.data_tranzactie.strftime("%Y-%m-%d %H:%M") if hasattr(t, 'data_tranzactie') and t.data_tranzactie else "N/A"
+            # Preluăm numele angajatului din tabela legată
+            nume_angajat = t.angajat.nume_angajat if t.angajat else "Sistem"
+            # Verificăm dinamic denumirea câmpului de total bon
+            total_plata = float(t.pret_total) if hasattr(t, 'pret_total') else 0.0
+            
+            rezultat.append({
+                "id": t.id,
+                "data": data_str,
+                "angajat": nume_angajat,
+                "metoda": t.metoda_plata if hasattr(t, 'metoda_plata') else "Cash",
+                "total": total_plata
+            })
+        return rezultat
+    except Exception as e:
+        print(f"[DB ERROR Istoric] Nu s-au putut prelua tranzacțiile: {e}")
+        return []
