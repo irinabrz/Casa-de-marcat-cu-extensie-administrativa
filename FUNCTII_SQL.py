@@ -193,21 +193,30 @@ def genereaza_date_raport_pdf(id_tranzactie):
         'produse': detalii
     }
 @transaction.atomic
-def inregistreaza_vanzare(id_angajat, lista_produse, metoda_plata, id_client=None):
+def inregistreaza_vanzare(id_angajat, lista_produse, metoda_plata, nume_client_str=None):
     """
     id_angajat: int
     lista_produse: lista de dictionare [{'id': 1, 'cantitate': 2}, ...]
+    nume_client_str: str (Numele preluat direct din TextField-ul din Flet)
     """
     total_bon = 0
     angajat = Angajat.objects.get(id=id_angajat)
-    client = Client.objects.get(id=id_client) if id_client else None
+    
+    client = None
+    if nume_client_str and nume_client_str.strip():
+        nume_curat = nume_client_str.strip()
+        client = Client.objects.filter(nume_client=nume_curat).first()
+        if not client:
+            client = Client.objects.create(nume_client=nume_curat)
 
     t = Tranzactie.objects.create(angajat=angajat, client=client, metoda_plata=metoda_plata)
+    
     for item in lista_produse:
         p = Produs.objects.get(id=item['id'])
         
         if p.stoc_curent < item['cantitate']:
             raise Exception(f"Stoc insuficient pentru {p.nume_produs}")
+            
         TranzactieProdus.objects.create(
             tranzactie=t,
             produs=p,
@@ -217,11 +226,14 @@ def inregistreaza_vanzare(id_angajat, lista_produse, metoda_plata, id_client=Non
         p.stoc_curent -= item['cantitate']
         p.save()
         total_bon += (p.pret * item['cantitate'])
+        
     t.pret_total = total_bon
     t.save()
+    
     if client:
         client.nr_tranzactii += 1
         client.save()
+        
     return t
 def get_istoric_tranzactii_complet():
     """
@@ -233,11 +245,8 @@ def get_istoric_tranzactii_complet():
         rezultat = []
         
         for t in tranzactii:
-            # Formatăm data curat pentru tabel
             data_str = t.data_tranzactie.strftime("%Y-%m-%d %H:%M") if hasattr(t, 'data_tranzactie') and t.data_tranzactie else "N/A"
-            # Preluăm numele angajatului din tabela legată
             nume_angajat = t.angajat.nume_angajat if t.angajat else "Sistem"
-            # Verificăm dinamic denumirea câmpului de total bon
             total_plata = float(t.pret_total) if hasattr(t, 'pret_total') else 0.0
             
             rezultat.append({
@@ -278,8 +287,10 @@ def generare_bon_fiscal(id_tranzactie, calePDF = "bon_fiscal.pdf"):
     
     pdf.cell(40, 7, txt="Data Tranzactie:")
     pdf.cell(0, 7, txt=data_formatata, ln=True)
-    
-    nume_client = getattr(tranzactie.client, 'nume', 'Client Anonim') if hasattr(tranzactie, 'client') else "N/A"
+    if tranzactie.client:
+        nume_client = getattr(tranzactie.client, 'nume_client', 'Client Anonim')
+    else:
+        nume_client = "Client Anonim"   
     pdf.cell(40, 7, txt="Client:")
     pdf.cell(0, 7, txt=nume_client, ln=True)
     pdf.ln(10)

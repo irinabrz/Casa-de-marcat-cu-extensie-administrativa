@@ -3,6 +3,7 @@ from FUNCTII_SQL import get_lista_produse_completa
 
 def VanzarePage(page: ft.Page):
     from UI_DASHBOARD import DashboardPage
+    id_real_angajat = getattr(page, "id_angajat_curent", 1)
 
     bon_curent = []
 
@@ -123,13 +124,14 @@ def VanzarePage(page: ft.Page):
 
             from FUNCTII_SQL import inregistreaza_vanzare
             
-            # Preluăm metoda selectată din RadioGroup din interfață (Implicit 'Cash')
             metoda_selectata = metoda_plata_radio.value
+            nume_client_introdus = tf_nume_client.value if tf_nume_client.value else None
             
             tranzactie_noua = inregistreaza_vanzare(
-                id_angajat=1, 
+                id_angajat=id_real_angajat, 
                 lista_produse=produse_pentru_salvare, 
-                metoda_plata=metoda_selectata
+                metoda_plata=metoda_selectata,
+                nume_client_str=nume_client_introdus
             )
 
             id_tranzactie_noua = tranzactie_noua.id
@@ -156,7 +158,6 @@ def VanzarePage(page: ft.Page):
 
             cale_pdf = f"bon_tranzactie_{id_tranzactie_noua}.pdf"
 
-            # Pop-up-ul cu opțiuni (fără funcții interne, doar lambda inline)
             dialog_succes = ft.AlertDialog(
                 title=ft.Text("Vânzare Înregistrată!", color="green", weight="bold"),
                 content=ft.Text(f"Tranzacția #{id_tranzactie_noua} a fost salvată!"),
@@ -215,7 +216,6 @@ def VanzarePage(page: ft.Page):
         cantitate_totala = sum(int(item["cantitate"]) for item in bon_curent)
         valoare_totala = sum(float(item["pret"]) * int(item["cantitate"]) for item in bon_curent)
         
-        # Mapăm tipul de plată numeric pentru AI (1 pentru Cash, 2 pentru Card)
         tip_plata_id = 1 if metoda_plata_radio.value == "Cash" else 2
 
         from FUNCTII_SQL import get_istoric_tranzactii_pentru_ai
@@ -287,15 +287,21 @@ def VanzarePage(page: ft.Page):
         nume_p = p.nume_produs if hasattr(p, 'nume_produs') else p.get('nume_produs', 'Fără Nume')
         pret_p = p.pret if hasattr(p, 'pret') else p.get('pret', 0.0)
         cat_p = p.categorie if hasattr(p, 'categorie') else p.get('categorie', '')
+        stoc_p = p.stoc_curent if hasattr(p, 'stoc_curent') else p.get('stoc_curent', 0)
         
+        culoare_stoc = "red400" if stoc_p <= 3 else "grey400"
         iconita_categorie = get_icon_for_category(cat_p)
+        
         card_produs = ft.ElevatedButton(
             content=ft.Container(
                 content=ft.Column([
-                    ft.Icon(iconita_categorie, color='white', size=45),
+                    ft.Icon(iconita_categorie, color='white', size=40),
                     ft.Text(value=nume_p, color='white', size=14, text_align=ft.TextAlign.CENTER, weight="bold", max_lines=2),
-                    ft.Text(value=f"{pret_p} RON", color='pink200', size=12)
-                ], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=10),
+                    ft.Row([
+                        ft.Text(value=f"{pret_p} RON", color='pink200', size=11, weight="bold"),
+                        ft.Text(value=f"Stoc: {stoc_p}", color=culoare_stoc, size=11, italic=True)
+                    ], alignment=ft.MainAxisAlignment.SPACE_EVENLY, spacing=5)
+                ], alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=5),
                 expand=True
             ),
             on_click=lambda _, prod=p, name=nume_p, id_p=id_produs: deschide_dialog_cantitate(prod, name, id_p),
@@ -311,13 +317,19 @@ def VanzarePage(page: ft.Page):
     lista_vizuala_bon = ft.ListView(expand=True, spacing=10)
     text_total = ft.Text("Total: 0.00 RON", size=22, weight="bold", color="pink")
 
-    # --- ELEMENTELE NOI ADAUGATE PENTRU METODA DE PLATA ---
     metoda_plata_radio = ft.RadioGroup(
         content=ft.Row([
             ft.Radio(value="Cash", label="Cash (Numerar)", fill_color="pink"),
             ft.Radio(value="Card", label="Card Bancar", fill_color="pink"),
         ], alignment=ft.MainAxisAlignment.SPACE_EVENLY),
-        value="Cash" # Valoarea selectată implicit
+        value="Cash"
+    )
+    
+    tf_nume_client = ft.TextField(
+        label="Nume Client (Opțional)",
+        hint_text="Introduceți numele clientului pentru fidelizare...",
+        border_color="pink",
+        width=300
     )
 
     page.add(
@@ -347,10 +359,12 @@ def VanzarePage(page: ft.Page):
                         text_total,
                         ft.Container(height=10),
                         
-                        # Titlu secțiune Metodă de plată
                         ft.Text("Metodă de Plată:", size=14, weight="w600", color="grey400"),
                         metoda_plata_radio,
                         ft.Container(height=10),
+                        
+                        tf_nume_client,
+                        ft.Container(height=15),
                         
                         ft.ElevatedButton(
                             "FINALIZARE COMANDĂ", 

@@ -3,19 +3,22 @@ import sys
 import django
 import flet as ft
 import asyncio
+
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'CONFIG_SISTEM.settings')
 os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
+
 try:
     django.setup()
 except Exception as e:
     print(f"Eroare setup Django: {e}")
+
 from UI_VANZARE import VanzarePage
 from UI_STOCURI import StocuriPage
 from UI_RAPOARTE import RapoartePage
 from UI_MARFA import MarfaNouaPage
 from UI_DASHBOARD import DashboardPage
-
+from FUNCTII_SQL import get_toti_angajatii
 
 
 def main(page : ft.Page):
@@ -43,16 +46,29 @@ def main(page : ft.Page):
                 pinDisplay.value += e.control.data
 
         if len(pinDisplay.value) == 6:
-            if pinDisplay.value == "111111":
+            lista_angajati = get_toti_angajatii()
+            angajat_gasit = None
+            
+            for angajat in lista_angajati:
+                id_angajat = angajat.get('id')
+                pin_generat = str(id_angajat) * 6
+                
+                if pinDisplay.value == pin_generat:
+                    angajat_gasit = angajat
+                    break
+
+            if angajat_gasit is not None:
                 pinDisplay.color = "green"
-                titlu.value = "Acces Permis!"
-                print("Acces Permis!")
+                nume_complet = angajat_gasit.get('nume_angajat', 'Angajat')
+                titlu.value = f"Acces Permis! Salut, {nume_complet}!"
                 page.update()
+                
+                page.id_angajat_curent = angajat_gasit.get('id')
+                
                 await asyncio.sleep(0.5)
                 page.clean()
                 DashboardPage(page)
                 
-
             else:
                 pinDisplay.color = 'red'
                 state["incercari"] -= 1
